@@ -1,0 +1,101 @@
+#include <Arduino_KNN.h>
+#include <tcs3200.h>
+
+const int INPUTS = 3; // Classifier input is color sensor data; red, green, and blue levels
+const int CLASSES = 3; // Number of objects we will classify (e.g., Red, Green, Blue)
+const int EXAMPLES_PER_CLASS = 5; // Number of times to show examples for each color
+
+// K=1 means the classifier looks for the single closest color example it's seen previously
+const int K = 1;
+
+// Create a new KNNClassifier
+KNNClassifier myKNN(INPUTS);
+
+// Names for each class (color)
+String label[CLASSES] = {"Red", "Green", "Blue"};
+
+// Array to store data to pass to the KNN library
+float color[INPUTS];
+
+void setup() {
+  pinMode(8, OUTPUT);
+  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(11, OUTPUT);
+  pinMode(A0, INPUT);
+
+  digitalWrite(8, HIGH);
+  digitalWrite(9, LOW);
+
+  Serial.begin(9600);
+  while (!Serial);
+
+  Serial.println("Calibrating the TCS3200 sensor...");
+
+  // Calibrate the TCS3200 sensor for each color
+  for (int currentClass = 0; currentClass < CLASSES; currentClass++) {
+    Serial.print("Calibrating for color: ");
+    Serial.println(label[currentClass]);
+
+    for (int currentExample = 0; currentExample < EXAMPLES_PER_CLASS; currentExample++) {
+      Serial.print("Show me an example of ");
+      Serial.println(label[currentClass]);
+
+      // Wait for an object then read its color
+      readColor(color);
+
+      // Add example color to the k-NN model
+      myKNN.addExample(color, currentClass);
+
+      // Wait for a brief moment before showing the next example
+      delay(500);
+    }
+  }
+
+  Serial.println("Calibration completed!");
+}
+
+void loop() {
+  int classification;
+
+  // Wait for the object to move away again
+  while (digitalRead(A0) == HIGH) {}
+
+  Serial.println("Let me guess the color");
+
+  // Wait for an object then read its color
+  readColor(color);
+
+  // Classify the color
+  classification = myKNN.classify(color, K);
+
+  // Print the classification
+  Serial.println(label[classification]);
+  Serial.println();
+}
+
+void readColor(float color[]) {
+  // Setting red filtered photodiodes to be read
+  digitalWrite(10, LOW);
+  digitalWrite(11, LOW);
+  // Reading the output frequency
+  int rawRed = pulseIn(A0, LOW);
+  color[0] = map(rawRed, 0, 1023, 0, 1023);
+  delay(100);
+
+  // Setting green filtered photodiodes to be read
+  digitalWrite(10, HIGH);
+  digitalWrite(11, HIGH);
+  // Reading the output frequency
+  int rawGreen = pulseIn(A0, LOW);
+  color[1] = map(rawGreen, 0, 1023, 0, 1023);
+  delay(100);
+
+  // Setting blue filtered photodiodes to be read
+  digitalWrite(10, LOW);
+  digitalWrite(11, HIGH);
+  // Reading the output frequency
+  int rawBlue = pulseIn(A0, LOW);
+  color[2] = map(rawBlue, 0, 1023, 0, 1023);
+  delay(100);
+}
